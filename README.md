@@ -8,7 +8,24 @@
 |---------|------------|
 | `make help` | список команд (по умолчанию) |
 | `make sources` | скачать исходники glibc в `artifacts/glibc-src/`; напоминает положить tar базового образа astra в `artifacts/` |
+| `make debs` | скачать .deb (`apt-transport-https` и т.п.) через `docker run` orel в `artifacts/apt-bootstrap/` |
 | `make build` | собрать образ `astra-linux:<ASTRA_VERSION>-glibc<GLIBC_VERSION>` (цель `glibc` из `Dockerfile`) |
+
+## Закрытый контур / https-репозиторий
+
+В базовом образе orel нет драйвера `/usr/lib/apt/methods/https`, поэтому если
+`apt-sources.list` ведёт на `https://` (или http редиректит на https), `apt-get`
+падает с `The method driver /usr/lib/apt/methods/https could not be found`.
+
+Решение — заранее скачать `apt-transport-https` и положить рядом:
+
+```sh
+make debs
+```
+
+`.deb` попадут в `artifacts/apt-bootstrap/`, а `Dockerfile` поставит их через
+`dpkg -i` до первого `apt-get update`. Переопределяемые переменные:
+`DEB_PACKAGES` (список пакетов), `APT_DEB_DIR`.
 
 ## Переменные
 

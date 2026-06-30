@@ -25,6 +25,16 @@ RUN if [ -f /tmp/cacrt/ca-chain.crt ] && grep -qE '^-----BEGIN CERTIFICATE-----'
     fi \
     && rm -rf /tmp/cacrt
 
+# Локально скачанные .deb (напр. apt-transport-https для https-репозитория в
+# закрытом контуре). Кладутся в artifacts/apt-bootstrap/ через `make debs`.
+# Ставятся ДО первого apt-get update, иначе https-метод недоступен.
+COPY artifacts/apt-bootstrap* /tmp/debs/
+RUN if ls /tmp/debs/*.deb >/dev/null 2>&1; then \
+        echo ">>> устанавливаю bootstrap .deb:" && ls -1 /tmp/debs/*.deb \
+        && dpkg -i /tmp/debs/*.deb; \
+    fi \
+    && rm -rf /tmp/debs
+
 
 FROM pre_build AS glibc_compile
 

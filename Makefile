@@ -8,12 +8,16 @@ OREL_IMAGE    ?= registry.astralinux.ru/library/orel:$(ASTRA_VERSION)
 OREL_TAR      ?= $(ARTIFACTS)/orel-$(ASTRA_VERSION).tar
 IMAGE         ?= astra-linux:$(ASTRA_VERSION)-glibc$(GLIBC_VERSION)
 
+APT_DEB_DIR   ?= $(ARTIFACTS)/apt-bootstrap
+DEB_PACKAGES  ?= apt-transport-https
+
 .DEFAULT_GOAL := help
-.PHONY: help sources image build
+.PHONY: help sources image debs build
 
 help:
 	@echo "  make sources   скачать исходники glibc $(GLIBC_VERSION) (базовый образ astra — tar в $(ARTIFACTS)/)"
-	@echo "  make image  скачать образ astra-linux с офф. репозитория $(OREL_IMAGE) -> $(OREL_TAR)"
+	@echo "  make image  	 скачать образ astra-linux с офф. репозитория $(OREL_IMAGE) -> $(OREL_TAR)"
+	@echo "  make debs      скачать .deb ($(DEB_PACKAGES)) через orel -> $(APT_DEB_DIR)/"
 	@echo "  make build     собрать базовый образ glibc $(GLIBC_VERSION): $(IMAGE)"
 
 sources:
@@ -24,6 +28,21 @@ sources:
 	  echo ">>> $$url"; curl -fSL -o "$$dest" "$$url"; fi
 	@if [ -f "$(OREL_TAR)" ]; then echo "  ✓ $(OREL_TAR)"; \
 	else echo "  ! нет $(OREL_TAR) — положи tar-архив базового образа astra в $(ARTIFACTS)/ вручную"; fi
+
+debs:
+	@mkdir -p $(APT_DEB_DIR)
+	@docker image inspect $(OREL_IMAGE) >/dev/null 2>&1 || \
+	  { if [ -f "$(OREL_TAR)" ]; then echo ">>> docker load -i $(OREL_TAR)"; docker load -i "$(OREL_TAR)"; \
+	    else echo "  ! образ $(OREL_IMAGE) не найден — сделай 'make image', затем 'docker load -i $(OREL_TAR)'"; exit 1; fi; }
+	docker run --rm \
+	  -v "$(abspath $(APT_DEB_DIR))":/out \
+	  $(OREL_IMAGE) \
+	  bash -euc 'apt-get update && \
+	    apt-get install -y --no-install-recommends --download-only $(DEB_PACKAGES) && \
+	    cp -v /var/cache/apt/archives/*.deb /out/ && \
+	    chmod -R a+rwX /out'
+	@echo "  ✓ .deb -> $(APT_DEB_DIR)/"
+	@ls -1 $(APT_DEB_DIR)/*.deb 2>/dev/null || echo "  ! ни одного .deb не скачано"
 
 build:
 	docker build -f Dockerfile --target glibc -t $(IMAGE) $(BUILD_CONTEXT) --progress plain
